@@ -3,6 +3,10 @@ import struct
 import io
 import sys
 
+BLOCK_TYPE_SMALL = 0x0
+BLOCK_TYPE_BIG_ON_SMALL = 0x1
+BLOCK_TYPE_BIG = 0x02
+
 def calcecc(data):
     assert len(data) == 0x210
     val = 0
@@ -17,13 +21,20 @@ def calcecc(data):
     val = ~val
     return data[:-4] + struct.pack("<L", (val << 6) & 0xFFFFFFFF)
 
-def addecc(data, block = 0, off_8 = b"\x00" * 4):
+def addecc(data, block = 0, off_8 = b"\x00" * 4, block_type=BLOCK_TYPE_BIG_ON_SMALL):
     res = b""
     while len(data):
         d = (data[:0x200] + b"\x00" * 0x200)[:0x200]
         data = data[0x200:]
         
-        d += struct.pack("<BL3B4s4s", 0, block // 32, 0xFF, 0, 0, off_8, b"\0\0\0\0")
+        if block_type == BLOCK_TYPE_BIG_ON_SMALL:
+            d += struct.pack("<BL3B4s4s", 0, block // 32, 0xFF, 0, 0, off_8, b"\0\0\0\0")
+        elif block_type == BLOCK_TYPE_BIG:
+            d += struct.pack("<BL3B4s4s", 0xFF, block // 256, 0, 0, 0, off_8, b"\0\0\0\0")
+        elif block_type == BLOCK_TYPE_SMALL:
+            d += struct.pack("<L4B4s4s", block // 32, 0, 0xFF, 0, 0, off_8, b"\0\0\0\0")
+        else:
+            raise ValueError("Block type not supported")
         d = calcecc(d)
         block += 1
         res += d
