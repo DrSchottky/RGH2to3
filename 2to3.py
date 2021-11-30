@@ -9,27 +9,28 @@ from argparse import ArgumentParser, FileType, ArgumentTypeError
 
 # ecc_utils.py
 import ecc_utils
-
-# pip install pycryptodome
-from Crypto.Cipher import ARC4 as RC4
+# rc4.py
+from rc4 import RC4
 
 _1BL_KEY = bytes.fromhex("DD88AD0C9ED669E7B56794FB68563EFA")
 
 CPUKEY_EXP = re.compile(r"^[0-9a-fA-F]{32}$")
 
-def decrypt_cb(cb: bytes, key: bytes) -> bytes:
-	key = hmac.new(key, cb[0x10:0x20], sha1).digest()[0:0x10]
-	cb = cb[0:0x10] + key + RC4.new(key).decrypt(cb[0x20:])
-	return cb
+def decrypt_cba(cba: bytes, key: bytes) -> bytes:
+	key = hmac.new(key, cba[0x10:0x20], sha1).digest()[0:0x10]
+	# cb = cb[0:0x10] + key + RC4.new(key).decrypt(cb[0x20:])
+	cba = cba[:0x10] + key + RC4(key).crypt(cba[0x20:])
+	return cba
 
 def decrypt_cbb(cbb: bytes, cba: bytes, cpukey: bytes) -> bytes:
 	secret = cba[0x10:0x20]
 	h = hmac.new(secret, digestmod=sha1)
 	h.update(cbb[0x10:0x20])
 	h.update(cpukey)
-	key = h.digest()[0:0x10]
-	cb = cbb[0:0x10] + key + RC4.new(key).decrypt(cbb[0x20:])
-	return cb
+	key = h.digest()[:0x10]
+	# cb = cbb[0:0x10] + key + RC4.new(key).decrypt(cbb[0x20:])
+	cbb = cbb[:0x10] + key + RC4(key).crypt(cbb[0x20:])
+	return cbb
 
 def cpukey_type(key: str) -> bytes:
 	matches = CPUKEY_EXP.match(key)
@@ -114,7 +115,7 @@ def main() -> None:
 			print("Detected 256/512MB Big Block Flash")
 			block_type = ecc_utils.BLOCK_TYPE.BIG
 		elif spare_sample[5] == 0xFF:
-			match spare_sample[0:2]:
+			match spare_sample[:2]:
 				case b"\x01\x00":
 					print("Detected 16/64MB Small Block Flash")
 					block_type = ecc_utils.BLOCK_TYPE.SMALL
@@ -153,7 +154,7 @@ def main() -> None:
 	fb_cbb_start = loader_start
 
 	print("\nDecrypting CB")
-	plain_fb_cba = decrypt_cb(fb_cba, _1BL_KEY)
+	plain_fb_cba = decrypt_cba(fb_cba, _1BL_KEY)
 	fb_cbb = decrypt_cbb(fb_cbb, plain_fb_cba, cpukey)
 	if fb_cbb[0x392:0x39A] not in [b"XBOX_ROM", b"\x00" * 8]:
 		print("CB_B decryption error (wrong CPU key?), aborting...")
