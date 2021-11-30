@@ -13,6 +13,7 @@ import ecc_utils
 from rc4 import RC4
 
 _1BL_KEY = bytes.fromhex("DD88AD0C9ED669E7B56794FB68563EFA")
+_SW_VER = "v1.0.0"
 
 CPUKEY_EXP = re.compile(r"^[0-9a-fA-F]{32}$")
 
@@ -39,7 +40,7 @@ def cpukey_type(key: str) -> bytes:
 	raise ArgumentTypeError("CPU key isn't a 32 character hex string")
 
 def main() -> None:
-	parser = ArgumentParser(description="RGH2 to RGH3 by DrSchottky")
+	parser = ArgumentParser(description=f"RGH2 to RGH3 by DrSchottky {_SW_VER}")
 	parser.add_argument("eccfile", type=FileType("rb"), help="The ECC file to apply")
 	parser.add_argument("infile", type=FileType("rb"), help="The flash image to convert to RGH3")
 	parser.add_argument("outfile", type=FileType("wb"), help="The flash image to output to")
