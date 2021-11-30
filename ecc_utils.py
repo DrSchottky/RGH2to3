@@ -4,13 +4,14 @@ from enum import Enum
 from io import BytesIO
 from struct import pack, unpack
 from argparse import ArgumentParser
+from typing import Union
 
 class BLOCK_TYPE(Enum):
 	SMALL = 0x0
 	BIG_ON_SMALL = 0x1
 	BIG = 0x02
 
-def calcecc(data: bytes | bytearray) -> bytes:
+def calcecc(data: Union[bytes, bytearray]) -> bytes:
 	assert len(data) == 0x210
 	val = 0
 	for i in range(0x1066):
@@ -24,7 +25,7 @@ def calcecc(data: bytes | bytearray) -> bytes:
 	val = ~val
 	return data[:-4] + pack("<L", (val << 6) & 0xFFFFFFFF)
 
-def addecc(data: bytes | bytearray, block: int = 0, off_8: bytes | bytearray = b"\x00" * 4, block_type: BLOCK_TYPE = BLOCK_TYPE.BIG_ON_SMALL):
+def addecc(data: Union[bytes, bytearray], block: int = 0, off_8: Union[bytes, bytearray] = b"\x00" * 4, block_type: BLOCK_TYPE = BLOCK_TYPE.BIG_ON_SMALL):
 	res = b""
 	while len(data):
 		d = (data[:0x200] + b"\x00" * 0x200)[:0x200]
@@ -43,17 +44,14 @@ def addecc(data: bytes | bytearray, block: int = 0, off_8: bytes | bytearray = b
 		res += d
 	return res
 
-def unecc(image: bytes | bytearray) -> bytes:
-	with (
-		BytesIO(image) as rbio,
-		BytesIO() as wbio
-	):
+def unecc(image: Union[bytes, bytearray]) -> bytes:
+	with BytesIO(image) as rbio, BytesIO() as wbio:
 		for i in range(len(image) // 528):
 			wbio.write(rbio.read(512))
 			rbio.seek(16, 1)  # skip 16 bytes
 		return wbio.getvalue()
 
-def verify(data: bytes | bytearray, block: int = 0, off_8: bytes | bytearray = b"\x00" * 4):
+def verify(data: Union[bytes, bytearray], block: int = 0, off_8: Union[bytes, bytearray] = b"\x00" * 4):
 	while len(data):
 		d = (data[:0x200] + b"\x00" * 0x200)[:0x200]
 		d += pack("<L4B4s4s", block // 32, 0, 0xFF, 0, 0, off_8, b"\x00" * 4)
