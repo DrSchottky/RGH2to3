@@ -39,7 +39,7 @@ def cpukey_type(key: str) -> bytes:
 	raise ArgumentTypeError("CPU key isn't a 32 character hex string")
 
 def main() -> None:
-	parser = ArgumentParser(description="*RGH2 to 3 by DrSchottky*")
+	parser = ArgumentParser(description="RGH2 to RGH3 by DrSchottky")
 	parser.add_argument("eccfile", type=FileType("rb"), help="The ECC file to apply")
 	parser.add_argument("infile", type=FileType("rb"), help="The flash image to convert to RGH3")
 	parser.add_argument("outfile", type=FileType("wb"), help="The flash image to output to")
