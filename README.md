@@ -1,4 +1,4 @@
-# RGH2 to 3 by DrSchottky
+# RGH2 to RGH3 by DrSchottky
 
 ```
 usage: 2to3.py [-h] [-k CPUKEY] eccfile infile outfile
