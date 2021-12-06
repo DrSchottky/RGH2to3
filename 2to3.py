@@ -110,23 +110,12 @@ def main() -> None:
 		print("Unexpected FB image length, aborting...")
 		return
 
+	print("\nDetecting Flash type")
 	if fb_with_ecc:
-		spare_sample = fb[0x4400:0x4410]
-		if spare_sample[0] == 0xFF:
-			print("Detected 256/512MB Big Block Flash")
-			block_type = ecc_utils.BLOCK_TYPE.BIG
-		elif spare_sample[5] == 0xFF:
-			if spare_sample[:2] == b"\x01\x00":
-				print("Detected 16/64MB Small Block Flash")
-				block_type = ecc_utils.BLOCK_TYPE.SMALL
-			elif spare_sample[:2] == b"\x00\x01":
-				print("Detected 16/64MB Big on Small Flash")
-				block_type = ecc_utils.BLOCK_TYPE.BIG_ON_SMALL
-			else:
-				print("Can't detect flash type, aborting...")
-				return
-		else:
-			print("Can't detect flash type, aborting...")
+		page_20_ecc = fb[0x4400:0x4410]
+		block_type = ecc_utils.get_block_type(page_20_spare_data=page_20_ecc)
+		if block_type == ecc_utils.BLOCK_TYPE.UNKNOWN:
+			print("aborting...")
 			return
 	else:
 		print("Detected 4GB Flash")
