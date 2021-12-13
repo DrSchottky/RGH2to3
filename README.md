@@ -16,6 +16,7 @@ options:
   -k CPUKEY, --cpukey CPUKEY
                         The CPU key for the given flash image
 ```
+With Glitch2m/MFG images use 00000000000000000000000000000000 as CPU Key  
 
 ### Known limitations:
 - Bad Blocks before Xell (addr 0x70000, blocks 0x0-0x3 on BB, blocks 0x0-0x1B on SB) have to be manually remapped

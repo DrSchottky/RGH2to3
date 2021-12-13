@@ -13,7 +13,7 @@ import ecc_utils
 from rc4 import RC4
 
 _1BL_KEY = bytes.fromhex("DD88AD0C9ED669E7B56794FB68563EFA")
-_SW_VER = "v1.0.0"
+_SW_VER = "v1.1.0"
 
 CPUKEY_EXP = re.compile(r"^[0-9a-fA-F]{32}$")
 
@@ -23,12 +23,13 @@ def decrypt_cba(cba: bytes, key: bytes) -> bytes:
 	cba = cba[:0x10] + key + RC4(key).crypt(cba[0x20:])
 	return cba
 
-def decrypt_cbb(cbb: bytes, cba: bytes, cpukey: bytes) -> bytes:
+def decrypt_cbb(cbb: bytes, cba: bytes, cpukey: bytes, key: bytes = b"") -> bytes:
 	secret = cba[0x10:0x20]
 	h = hmac.new(secret, digestmod=sha1)
 	h.update(cbb[0x10:0x20])
 	h.update(cpukey)
-	key = h.digest()[:0x10]
+	if not key:
+		key = h.digest()[:0x10]
 	# cb = cbb[0:0x10] + key + RC4.new(key).decrypt(cbb[0x20:])
 	cbb = cbb[:0x10] + key + RC4(key).crypt(cbb[0x20:])
 	return cbb
@@ -91,6 +92,17 @@ def main() -> None:
 		print("\nMissing ECC bootloaders, aborting...")
 		return
 
+	rgh3_cba_dec = decrypt_cba(rgh3_cba, _1BL_KEY)
+	rgh3_payload_dec = bytearray(decrypt_cbb(rgh3_payload, rgh3_cba_dec, b"\x00"*16))
+	if rgh3_payload_dec[0x354:0x358] == b"\x64\x6A\x00\x02":
+		print("Patching fake CB_B (RHG3 payload)")
+		rgh3_payload_dec[0x354:0x358] = b"\x64\x69\x00\x02"
+		rgh3_payload_dec[0x368:0x36c] = b"\x7d\x8c\x48\x2a"
+		rgh3_payload_dec[0x370:0x374] = b"\x64\x69\x00\x06"
+		rgh3_payload_dec[0x37c:0x380] = b"\xf8\x49\x10\x10"
+		rgh3_payload = decrypt_cbb(rgh3_payload_dec, rgh3_cba_dec, b"\x00"*16, rgh3_payload_dec[0x10:0x20])
+		rgh3_payload[0x10:0x20] = b"\x00"*16
+
 	print("\nLoading FB")
 	fb = args.infile.read()
 	args.infile.close()
@@ -120,12 +132,10 @@ def main() -> None:
 	else:
 		print("Detected 4GB Flash")
 
+	xell_not_found = False
 	if fb[xell_start:xell_start + 0x10] != bytes.fromhex("48000020480000EC4800000048000000"):
-		print("XeLL header not found, aborting...")
-		return
-
-	print("\nPatching SMC")
-	patchable_fb = patchable_fb[:rgh3_smc_start] + rgh3_smc + patchable_fb[rgh3_smc_start + rgh3_smc_len:]
+		print("XeLL header not found")
+		xell_not_found = True
 
 	print("\nExtracting FB bootloaders")
 
@@ -141,6 +151,38 @@ def main() -> None:
 	print(f"Found {loader_name.decode()} {loader_ver} with size 0x{loader_size:08X} at 0x{loader_start:08X}")
 	fb_cbb = patchable_fb[loader_start:loader_start + loader_size]
 	fb_cbb_start = loader_start
+	loader_start += loader_size
+
+	if xell_not_found:
+		print("Looking for XDK BL")
+		(loader_name, loader_ver, loader_flags, loader_ep, loader_size) = unpack(">2sHLLL", patchable_fb[loader_start:loader_start + 16])
+		loader_start += loader_size
+		if loader_name.decode() != "SC":
+			print("Not an XDK image, aborting...")
+			return
+		print("XDK image found, changing patching method")
+		#Get SD
+		(loader_name, loader_ver, loader_flags, loader_ep, loader_size) = unpack(">2sHLLL", patchable_fb[loader_start:loader_start + 16])
+		loader_start += loader_size
+		#Get SE
+		(loader_name, loader_ver, loader_flags, loader_ep, loader_size) = unpack(">2sHLLL", patchable_fb[loader_start:loader_start + 16])
+		loader_start += loader_size
+		new_page = loader_start // 0x200
+		if (loader_start % 0x200 != 0):
+			new_page += 1
+		#Adding 4 pages
+		new_page += 4
+		if fb_with_ecc:
+			new_address = new_page * 0x210
+			patchable_fb = fb[:new_address]
+			patchable_fb = ecc_utils.unecc(patchable_fb)
+		else:
+			new_address = new_page * 0x200
+			patchable_fb = fb[:new_address]
+
+	print("\nPatching SMC")
+	patchable_fb = patchable_fb[:rgh3_smc_start] + rgh3_smc + patchable_fb[rgh3_smc_start + rgh3_smc_len:]
+
 
 	print("\nDecrypting CB")
 	plain_fb_cba = decrypt_cba(fb_cba, _1BL_KEY)
